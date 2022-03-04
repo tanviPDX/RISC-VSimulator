@@ -1,0 +1,130 @@
+#include <stdio.h>
+
+#define dest_register_shift 7
+#define funct_low3_shift 12
+#define source_register1_shift 15
+#define source_register2_shift 20
+#define funct_upper7_shift 25
+#define ADD  0
+#define SUB  256
+#define SLL  1
+#define SLT  2
+#define SLTU 3
+#define XOR  4
+#define SRL  5
+#define SRA  261
+#define OR   6
+#define AND  7
+
+void rtypeexecute(int function)
+{
+	 int rd;
+	 int rs1;
+	 int rs2;
+	 printf("enter the value of register 1\n");
+     scanf("%d",&rs1);
+     printf("enter the value of register 2\n");
+     scanf("%d",&rs2);
+ 
+	int rs2_mask=(rs2 & 0x0000001f);
+  int rs1_msb,rs1_msb_temp,rd_temp,rd_temp1;
+  int rsa_temp=0xffffffff;
+	switch(function)
+	{
+		case ADD : rd=rs1+rs2; 
+			   break;
+		case SUB : rd=rs1-rs2;
+			   break;
+		case SLL : rd=rs1<<rs2_mask;
+			   break;
+		case SRL : rd=rs1>>rs2_mask;
+			   break;
+        	case SRA : rd_temp1=rs1>>rs2_mask;
+               rs1_msb_temp=0x80000000;
+               rs1_msb=(rs1_msb_temp & rs1);
+               rs1_msb=rs1_msb>>31;
+               if(rs1_msb==1)
+               {
+               rd_temp=rsa_temp<<(32-rs2_mask);
+               rd=(rd_temp1 |  rd_temp);
+               }
+               else
+               {
+               rd=rs1>>rs2_mask;
+               }
+			   break;
+		case SLT : if(rs1<rs2)
+               {
+               rd=1;
+               }
+               else
+               { 
+               rd=0;
+               }   
+			   break;
+		case SLTU: if(rs2!=0)
+               {
+               rd=1;
+               }
+               else
+               { 
+               rd=0;
+               }
+			   break;
+		case XOR : rd= (rs1 ^ rs2);
+			   break;
+		case OR  : rd= (rs1 | rs2);
+			   break;
+		case AND : rd= (rs1 & rs2); 
+			   break;
+	    default: 
+	            printf("not an instruction\n");
+	            rd=rd; rs1=rs1; rs2=rs2;
+	           break;
+	}
+ printf("rd = %d rs1 = %d rs2 = %d \n",rd,rs1,rs2);
+}
+
+void rtype(int instruction)
+{
+    unsigned int opcode,dest_register,funct_low3,source_register1,source_register2,funct_upper7;
+    unsigned int function;
+    
+    dest_register=(instruction & 0x00000f80);  
+    dest_register=dest_register>>dest_register_shift;
+
+    funct_low3=(instruction & 0x00007000);
+    funct_low3=funct_low3>>funct_low3_shift;
+    
+    source_register1=(instruction & 0x000f8000);
+    source_register1=source_register1>>source_register1_shift;
+    
+    source_register2=(instruction & 0x01f00000);
+    source_register2=source_register2>>source_register2_shift;
+    
+    funct_upper7=(instruction & 0xfe000000);
+    funct_upper7=funct_upper7>>funct_upper7_shift;
+    
+    
+   printf("rd = %x funct3 = %x rs1 = %x rs2 = %x funct7 = %x\n",dest_register,funct_low3,source_register1,source_register2,funct_upper7);
+
+    function=funct_upper7;
+    function=function<<3;
+    function=function+funct_low3;
+    printf("function = %x\n",function);
+    rtypeexecute(function);
+}
+
+int main()
+{
+unsigned int instruction,opcode;
+printf("enter the instruction\n");
+scanf("%d",&instruction);
+opcode=(instruction & 0x0000007f);
+printf("opcode=%x\n",opcode);
+if(opcode==0x00000033)
+{
+    rtype(instruction);
+}
+}
+
