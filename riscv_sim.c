@@ -4,7 +4,7 @@
 #include <string.h>
 
 uint8_t memory[65536];
-uint32_t current_instruction;
+uint32_t current_instruction,opcode;
 
 
 #define BYTE1_MASK 0xFF000000
@@ -15,6 +15,65 @@ uint32_t current_instruction;
 #define BYTE1_SHIFT_AMOUNT 24
 #define BYTE2_SHIFT_AMOUNT 16
 #define BYTE3_SHIFT_AMOUNT 8
+
+/************ Sign extension for J type ***********/
+int32_t signExtension_Jtype(int32_t imm) 
+{
+    int32_t imm_extend = (0x001FFFFF & imm);
+    int32_t mask = 0x00100000;
+    
+    if (mask & imm_extend) 
+    {
+    
+        imm_extend |= 0xFFE00000;
+    }
+    return imm_extend;
+}
+
+/************ Structure for Instruction fields ***************/
+typedef struct
+{
+    int32_t imm; //offset
+    uint32_t rs2; //src2
+    uint32_t rs1; //src1/base
+    uint32_t funct; //width
+    uint32_t rd; //destination
+} InstFields_t;
+
+/******** Mask, Shift Amount, and Function Type amount J-type instruction *********/
+#define J_OFFSET3_FIELD 0x000ff000
+#define J_OFFSET1_FIELD 0x7fe00000
+#define J_OFFSET2_FIELD 0x00100000
+#define J_OFFSET4_FIELD 0x80000000
+#define J_DEST_FIELD    0x00000f80
+#define J_OFFSET3_SHAMT 12
+#define J_OFFSET1_SHAMT 21
+#define J_OFFSET2_SHAMT 25
+#define J_OFFSET4_SHAMT 31
+#define J_DEST_SHAMT    7
+
+/************* Extracting B-type Instruction fields *************/
+InstFields_t* JTypeInst(uint32_t current_instruction){
+    InstFields_t* JFields;
+    int imm1, imm2, imm3, imm4;
+
+    JFields = malloc(sizeof(InstFields_t));
+    JFields->imm = 0x0;
+
+    JFields->rd= (current_instruction & J_DEST_FIELD) >> J_DEST_SHAMT;
+
+    imm1 = (current_instruction & J_OFFSET1_FIELD) >> J_OFFSET1_SHAMT;
+    imm2 = (current_instruction & J_OFFSET2_FIELD) >> J_OFFSET2_SHAMT;
+    imm3 = (current_instruction & J_OFFSET3_FIELD) >> J_OFFSET3_SHAMT;
+    imm4 = (current_instruction & J_OFFSET4_FIELD) >> J_OFFSET4_SHAMT;
+    printf("Imm1: %x Imm2: %x Imm3: %x Imm4: %x \n", imm1,imm2,imm3,imm4);
+    JFields->imm = JFields->imm + (imm1 << 1) + (imm2 << 11) + (imm3 << 12) + (imm4 << 20);
+    //printf("Imm (before sign extension): %x\n ", JFields->imm);
+    JFields->imm = signExtension_Jtype(JFields->imm);
+
+    printf("Immediate field: %x \nDestination register addr: %x \n", JFields->imm, JFields->rd);
+    return JFields;
+}
 
 void memory_load(char *file)
 {
@@ -34,9 +93,9 @@ void memory_load(char *file)
     do {
       fscanf(f, "%s %s", str1,str2);
       //delimited_str = strtok(s,":");
-      addr = strtol(str1,0,16);
-      data = strtol(str2,0,16);
-      //printf("\n%s %s %u %u", str1,str2,addr,data);
+      addr = strtoll(str1,0,16);
+      data = strtoll(str2,0,16);
+      printf("\n%s %s %x %x", str1,str2,addr,data);
       byte1 = (data & BYTE1_MASK) >> BYTE1_SHIFT_AMOUNT;
       byte2 = (data & BYTE2_MASK) >> BYTE2_SHIFT_AMOUNT;
       byte3 = (data & BYTE3_MASK) >> BYTE3_SHIFT_AMOUNT;
@@ -50,7 +109,7 @@ void memory_load(char *file)
     
     fclose(f);
     /*for(int i=0; i<65536; i++) {
-      printf("Memory[%u] = %u",i,memory[i]);
+      printf(" Memory[%u] = %x",i,memory[i]);
     }*/
 }
 
@@ -73,6 +132,7 @@ int main(int argc, char *argv[])
     char default_file_name[] = "program.mem";
     uint32_t pc, sp, ra = 0;
     char *file_name, *sp_arg, *pc_arg;
+    InstFields_t* current_inst;
     /*FILE *f;
     uint32_t addr,data;
     char s[10],t[10];
@@ -101,6 +161,14 @@ int main(int argc, char *argv[])
     
     memory_load(file_name);
     current_instruction = instruction_fetch(pc);
+    
+    opcode=(current_instruction & 0x0000007f);
+    printf("opcode=%x\n",opcode);
+    
+    if(opcode==0x0000006f)
+    {
+    current_inst = JTypeInst(current_instruction);
+    }
     
     printf("\n\n");
     
