@@ -1,0 +1,79 @@
+40 INSTRUCTIONS RISC-V
+
+
+Group 1- Control Transfer Instructions
+
+1) JAL - Jump and Link 
+2) JALR - Jump and Link Register 
+3) BEQ - Branch if Equal
+4) BNE - Branch if not Equal 
+5) BLT - Branch Less Than 
+6) BLTU - Branch if Less Than Unsigned 
+7) BGE - Branch if Greater Than Equal 
+8) BGEU - Branch if Greater Than Equal Unsigned
+9) BGT - Branch if Greater Than
+10) BGTU - Branch if Greater Than Unsigned 
+11) BLE - Branch if Less Than Equal
+12) BLEU - Branch if Less Than Equal Unsigned
+
+J RA    801F0793
+
+Group 2- Load Instructions
+
+OPCODE = 0000011	
+
+1) LB   - Load Byte				FUNCTION = 000
+2) LH   - Load Halfword			FUNCTION = 001	
+3) LW  - Load Word				FUNCTION = 010
+4) LBU - Load Byte Unsigned		FUNCTION = 100
+5) LHU - Load Hafword Unsigned		FUNCTION = 101
+	
+Group 3 Store Instruction 
+
+OPCODE = 0100011
+
+1) SB - Store Byte				FUNCTION = 000
+2) SH - Store Halfword			FUNCTION = 001
+3) SW - Store Word 			FUNCTION = 010
+
+
+Group 4  U-TYPE
+
+1) LUI - Load Upper Immediate	  OPCODE= 0110111   
+2) AUIPC - Add Upper Immediate  OPCODE= 0010111
+                  to Program Counter
+
+
+Group 5- Register Immediate Instruction
+
+OPCODE = 0010011
+
+FUNCTION
+1) ADDI - Add Immediate			FUNCTION=000
+2) SLTI - Set Less Than Immediate	FUNCTION=010
+3) SLTIU - Set Less Than			FUNCTION=011
+                 Immediate Unsigned
+4) XORI - Xor Immediate			FUNCTION=100
+5) ORI - OR Immediate			FUNCTION=110
+6) ANDI - AND Immediate			FUNCTION=111
+7) SLLI - Shift Logical Left Immediate	FUNCTION=0000000 001
+8) SRLI - Shift Right Left Immediate	FUNCTION=0000000 101
+9) SRAI - Shift Right Arithmetic		FUNCTION=0100000 101
+		       Immediate
+
+
+Group 6- Register Register Instructions
+
+OPCODE = 0110011
+
+FUNCTION
+1) ADD - Add  				FUNTION=  0000000  000 
+2) SUB - Sub  				FUNTION=  0100000  000
+3) SLL - Shift Logical Left			FUNTION=  0000000  001
+4) SLT - Set Less Than			FUNTION=  0000000  010
+5) SLTU - Set Less Than Unsigned	FUNTION=  0000000  011
+6) XOR - Xor					FUNTION=  0000000  100
+7) SRL - Shift Right Logical		FUNTION=  0000000  101
+8) SRA - Shift Right Arithmetic		FUNTION=  0100000  101
+9) OR - Or 					FUNTION=  0000000  110
+10) AND - And				FUNTION=  0000000  111
