@@ -41,7 +41,7 @@ void utype(int instruction, int opcode)
     {
         luiexecute(imm);
     }
-    else if (opcode == 0x00000027)
+    else if (opcode == 0x00000017)
     {
         auipcexecute(imm);
     }
@@ -57,7 +57,7 @@ int main()
     opcode=(instruction & 0x0000007f);
     printf("Opcode=%x\n",opcode);
     
-    if((opcode==0x00000037) || (opcode == 0x00000027))
+    if((opcode==0x00000037) || (opcode == 0x00000017))
     {
         utype(instruction, opcode);
     }
