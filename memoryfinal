@@ -7,6 +7,12 @@
 #include <string.h>
 #include <stdlib.h>
 
+/********Mode**********/
+#define SILENT 0
+#define VERBOSE 1
+#define DEBUG 2
+uint8_t mode;
+
 /******** Mask and Shift Amount for loading into Memory *********/
 #define BYTE4_MASK          0xFF000000  //Masks
 #define BYTE3_MASK          0x00FF0000
@@ -64,7 +70,7 @@
 #define J_DEST_FIELD    0x00000f80
 #define J_OFFSET3_SHAMT 12			//Shift Amounts
 #define J_OFFSET1_SHAMT 21
-#define J_OFFSET2_SHAMT 25
+#define J_OFFSET2_SHAMT 20
 #define J_OFFSET4_SHAMT 31
 #define J_DEST_SHAMT    7
 
@@ -90,8 +96,8 @@
 #define LB 				0			//Function Type
 #define LH 				1
 #define LW 				2
-#define LBU 			4
-#define LHU 			5
+#define LBU 4
+#define LHU 5
 
 /******** Mask, Shift Amount, and Function Type for U-type instruction *********/
 #define U_OFFSET_FIELD	0xfffff000  //Masks
@@ -163,10 +169,10 @@ typedef struct
 } InstFields_t;
 
 /************ Function Declarations ************/
-void memory_load(char *file); // Load program into memory
-uint32_t instruction_fetch(uint32_t pc); //Fetch
-void Decode(uint32_t current_instruction, InstFields_t *InstFields); //Decode
-void ExecuteInstruction(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, int8_t* flag); //Execute
+void memory_load(char *file, uint8_t* flag); // Load program into memory
+uint32_t instruction_fetch(uint32_t pc, uint8_t* flag); //Fetch
+void Decode(uint32_t current_instruction, InstFields_t *InstFields, uint8_t* flag); //Decode
+void ExecuteInstruction(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag); //Execute
 
 void BTypeInst(uint32_t current_instruction, InstFields_t *BFields); //B-type decode
 void STypeInst(uint32_t current_instruction, InstFields_t *SFields); //S-type decode
@@ -177,15 +183,15 @@ void JALRInst(uint32_t current_instruction, InstFields_t *JALfields); //JALR dec
 void JInst(uint32_t current_instruction, InstFields_t *Jfields); //J decode
 void LoadInst(uint32_t current_instruction, InstFields_t *LFields); //Load decode
 
-void StoreData(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC); //S-type execute
-void Branch(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC); //B-type execute
-void LUIexecute(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC); //LUI execute
-void AUIPCexecute(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC); //AUIPC execute
-void RTypeExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC); //R-type execute
-void LoadExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC); //Load execute
-void JALRExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, int8_t* flag); //JALR execute
-void JExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC); //J execute
-void ITypeExecute(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC); //I-type execute
+void StoreData(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag); //S-type execute
+void Branch(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag); //B-type execute
+void LUIexecute(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag); //LUI execute
+void AUIPCexecute(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag); //AUIPC execute
+void RTypeExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag); //R-type execute
+void LoadExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag); //Load execute
+void JALRExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag); //JALR execute
+void JExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag); //J execute
+void ITypeExecute(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag); //I-type execute
 
 int signExtension(int imm); //Sign extension R-type
 int32_t signExtension_Jtype(int32_t imm); //Sign extension J-type
@@ -200,9 +206,10 @@ int main(int argc, char *argv[])
     unsigned int default_pc = 0, default_sp = 65535;
     char default_file_name[] = "branch.mem";
     uint32_t pc;
-    char *file_name, *sp_arg, *pc_arg;
+    char *file_name, *sp_arg, *pc_arg, *mode_arg;
     uint8_t flag, i; //local variables
     int32_t GPR[32]; //General Purpose Register
+    GPR[1] = 0; //ra register initialized to 0
 
     //Initialization of variables: file, pc, sp and flags
     if(argc == 1)
@@ -210,65 +217,82 @@ int main(int argc, char *argv[])
         file_name = default_file_name;
         pc = default_pc;
         GPR[2] = default_sp;
+        mode = 0;
     }
     else
     {
+        mode_arg = argv[4];
         file_name = argv[3];
         sp_arg = argv[2];
         pc_arg = argv[1];
         pc = atoi(pc_arg);
         GPR[2] = atoi(sp_arg);
+        mode = atoi(mode_arg);
     }
 
-	GPR[0] = 0x0;
-
-    printf("\nProgram counter: %u",pc);
-    printf("\nStack pointer: %u",GPR[2]);
-    printf("\nFile name: %s\n",file_name);
+	  GPR[0] = 0x0;
+    
+    if(mode == DEBUG) {
+      printf("\nProgram counter: %u",pc);
+      printf("\nStack pointer: %u",GPR[2]);
+      printf("\nFile name: %s",file_name);
+      printf("\nMode: %d",mode);
+    }
 
     flag = 1;
     i = 1;
 
     //Function call to load program into memory
-    memory_load(file_name);
+    memory_load(file_name,&flag);
 
     //Loop for fetch, decode and execute
     while(flag){
-        current_instruction = instruction_fetch(pc);//function call to fetch instruction
-        printf("\nCompleted fetching\n");
-        Decode(current_instruction, &InstFields); //function call to decode instruction
-        printf("\nCompleted decoding\n");
+        current_instruction = instruction_fetch(pc, &flag);//function call to fetch instruction
+        if(mode == DEBUG)
+          printf("\nCompleted fetching\n");
+        Decode(current_instruction, &InstFields, &flag); //function call to decode instruction
+        if(mode == DEBUG)
+          printf("\nCompleted decoding\n");
         ExecuteInstruction(GPR, &InstFields, memory, &pc, &flag);//function call to execute instruction
-        printf("\nCompleted execution\n");
-        //pc = pc + 4;
-        printf("PC: %x", pc);
-        /*if(i == 4) flag = 0; //condition to exit loop
-        i++;
-        printf("\nConditions --> i: %d, flag: %d\n", i, flag);*/
+        if(mode == DEBUG)
+          printf("\nCompleted execution\n");
+        //printf("PC: %x", pc);
+		    if(mode == VERBOSE || mode == DEBUG)
+          PrintReg(GPR, &pc);
     }
 
     //Function call to print all the register values
-    printf("\nRegister values");
-    PrintReg(GPR, &pc);
+    if(mode == SILENT || mode == DEBUG) {
+      printf("\nSimulation Ended");
+      printf("\nCurrent PC: %x", pc);
+	    //printf("\nRegister values");
+      PrintReg(GPR, &pc);
+	}
 
-    printf("******************* END *****************\n");
+    printf("******************* END *****************\n\n");
     return 0;
 }
 
 /************ Loading Program into Memory ***************/
-void memory_load(char *file)
+void memory_load(char *file, uint8_t* flag)
 {
     FILE *f;
     uint32_t addr,data;
     char str1[10],str2[10];
+	int file_size = 0;
 
     uint8_t byte1, byte2, byte3, byte4;
 
     f=fopen(file, "r");
-    if(f==NULL)
-      printf("\nFile open failed ");
-    else
-      printf("\nFile opened successfully");
+	
+	if(mode == SILENT || mode == VERBOSE || mode == DEBUG) {
+      if(f==NULL) {
+        printf("\nFile open failed ");
+		*flag = 0;
+	  }
+      else
+        printf("\nFile opened successfully");
+	}
 
     do {
       fscanf(f, "%s %s", str1,str2);
@@ -285,24 +309,35 @@ void memory_load(char *file)
       memory[addr+1] = byte2;
       memory[addr+2] = byte3;
       memory[addr+3] = byte4;
+	  file_size += 4;
     }while(!feof(f));
 
     fclose(f);
-    printf("\nData in the memory:\n");
-    for(int i=0; i<4; i++) {
-      printf(" Memory[%u] = %x\n",i,memory[i]);
-    }
+	
+	if(file_size > 65535) {
+			printf("\n ERROR!! Memeory image too large!");
+			*flag = 0;
+	}
+	if(mode == DEBUG) {
+      printf("\nData in the memory:\n");
+      /*for(int i=0; i<65536; i++) {
+        printf(" Memory[%u] = %x\n",i,memory[i]);
+      }*/
+	}
 }
 
 
 /************ Print Register Values ***************/
 void PrintReg(int32_t* GPR, uint32_t* PC){
     uint32_t i;
-    printf("\n****** Register values ******\n");
-    for(i = 0; i <= 31; i++){
-      printf("x%d : %x\n", i, GPR[i]);
+    printf("\n                                                ****** Register values ******");
+    printf("\n-----------------------------------------------------------------------------------------------------------------------------------------");
+    for(i=0;i<32;i+=8) {
+        printf("\n| x%-2d = %-8x | x%-2d = %-8x | x%-2d = %-8x | x%-2d = %-8x | x%-2d = %-8x | x%-2d = %-8x | x%-2d = %-8x | x%-2d = %-8x |", i,GPR[i],i+1,GPR[i+1],i+2,GPR[i+2],i+3,GPR[i+3],i+4,GPR[i+4],i+5,GPR[i+5],i+6,GPR[i+6],i+7,GPR[i+7]);
+        printf("\n-----------------------------------------------------------------------------------------------------------------------------------------");
     }
-    printf("PC : %x\n", *PC);
+    printf("\n\n");
+    //printf("PC : %x\n", *PC);
 }
 
 /************* Extracting B-type Instruction fields *************/
@@ -325,7 +360,8 @@ void BTypeInst(uint32_t current_instruction, InstFields_t *BFields){
         BFields->imm = BFields->imm + 0xffffe000;
     }
 
-    printf("Immediate field: %x \nSource register 1 addr: %x \nSource register 2 addr: %x \nFunction: %x\n", BFields->imm, BFields->rs1, BFields->rs2, BFields->funct3);
+    if(mode == DEBUG)
+		printf("Immediate field: %x \nSource register 1 addr: %x \nSource register 2 addr: %x \nFunction: %x\n", BFields->imm, BFields->rs1, BFields->rs2, BFields->funct3);
 }
 
 /************* Extracting S-type Instruction fields *************/
@@ -346,7 +382,8 @@ void STypeInst(uint32_t current_instruction, InstFields_t *SFields){
         SFields->imm = SFields->imm + 0xfffff000;
     }
 
-    printf("Immediate field: %x \nBase register addr: %x \nSource register addr: %x \nFunction: %x\n", SFields->imm, SFields->rs1, SFields->rs2, SFields->funct3);
+    if(mode == DEBUG)
+	    printf("Immediate field: %x \nBase register addr: %x \nSource register addr: %x \nFunction: %x\n", SFields->imm, SFields->rs1, SFields->rs2, SFields->funct3);
 }
 
 /************* Extracting U-type Instruction fields *************/
@@ -357,7 +394,8 @@ void UTypeInst(uint32_t current_instruction, InstFields_t *UFields){
     UFields->rd = (current_instruction & U_DEST_FIELD) >> U_DEST_SHAMT;
     UFields->imm = (current_instruction & U_OFFSET_FIELD) >> U_OFFSET_SHAMT;
 
-    printf("Immediate field: %x \nDestination register addr: %x \n", UFields->imm, UFields->rd);
+    if(mode == DEBUG)
+        printf("Immediate field: %x \nDestination register addr: %x \n", UFields->imm, UFields->rd);
 }
 
 /************* Extracting I-type Instruction fields *************/
@@ -372,14 +410,16 @@ void ITypeInst(uint32_t current_instruction, InstFields_t *IFields){
 	if((IFields->funct3 == 0x1) || (IFields->funct3 == 0x5)){
 		IFields->shamt = (current_instruction & I_SHIFT_FIELD) >> I_SHIFT_SHAMT;
 		IFields->funct7 = (current_instruction & I_WIDTH2_FIELD) >> I_WIDTH2_SHAMT;
-		printf("Shift Amount: %x \nSource register addr: %x \nDestination register addr: %x \nFunction3: %x\n \nFunction7: %x\n", IFields->shamt, IFields->rs1, IFields->rd, IFields->funct3, IFields->funct7);
+		if(mode == DEBUG)
+		    printf("Shift Amount: %x \nSource register addr: %x \nDestination register addr: %x \nFunction3: %x\n \nFunction7: %x\n", IFields->shamt, IFields->rs1, IFields->rd, IFields->funct3, IFields->funct7);
 	}
 	else{
 		IFields->imm = (current_instruction & I_OFFSET_FIELD) >> I_OFFSET_SHAMT;
 		if(IFields->imm & (1<<11)){
 			IFields->imm = IFields->imm + 0xfffff000;
 		}
-		printf("Immediate field: %x \nSource register addr: %x \nDestination register addr: %x \nFunction3: %x\n", IFields->imm, IFields->rs1, IFields->rd, IFields->funct3);
+	if(mode == DEBUG)
+	    printf("Immediate field: %x \nSource register addr: %x \nDestination register addr: %x \nFunction3: %x\n", IFields->imm, IFields->rs1, IFields->rd, IFields->funct3);
 	}
 }
 
@@ -392,7 +432,8 @@ void RTypeInst(uint32_t current_instruction, InstFields_t *RFields)
     RFields->rs2 = (current_instruction & R_SRC2_FIELD) >> R_SRC2_SHAMT;
     RFields->funct7 = (current_instruction & R_FUNCT7_FIELD) >> R_FUNCT7_SHAMT;
 
-    printf("rd = %d funct3 = %d rs1 = %d rs2 = %d funct7 = %d\n",RFields->rd,RFields->funct3,RFields->rs1,RFields->rs2,RFields->funct7);
+    if(mode == DEBUG)
+        printf("rd = %d funct3 = %d rs1 = %d rs2 = %d funct7 = %d\n",RFields->rd,RFields->funct3,RFields->rs1,RFields->rs2,RFields->funct7);
 }
 
 /************* Extracting J Instruction field *************/
@@ -412,7 +453,8 @@ void JInst(uint32_t current_instruction, InstFields_t *Jfields){
     //printf("Imm (before sign extension): %x\n ", JFields->imm);
     Jfields->imm = signExtension_Jtype(Jfields->imm);
 
-    printf("JType Instruction Fields- Immediate field: %x \nDestination register addr: %x \n", Jfields->imm, Jfields->rd);
+    if(mode == DEBUG)
+	    printf("JType Instruction Fields- Immediate field: %x \nDestination register addr: %x \n", Jfields->imm, Jfields->rd);
 }
 
 /************* Extracting JALR Instruction field *************/
@@ -425,7 +467,8 @@ void JALRInst(uint32_t current_instruction, InstFields_t *JALFields){
     JALFields->imm = (current_instruction & JAL_IMM_FIELD) >> JAL_IMM_SHAMT;
     JALFields->imm = signExtension(JALFields->imm);
 
-    printf("JAL Instruction Fields- Immediate field: %x Destination register addr: %x Source register addr: %x Func: %x \n", JALFields->imm, JALFields->rd, JALFields->rs1, JALFields->funct3);
+    if(mode == DEBUG)
+        printf("JAL Instruction Fields- Immediate field: %x Destination register addr: %x Source register addr: %x Func: %x \n", JALFields->imm, JALFields->rd, JALFields->rs1, JALFields->funct3);
 }
 
 /************* Extraction load instruction fields ****************/
@@ -436,6 +479,8 @@ void LoadInst(uint32_t current_instruction, InstFields_t *LFields)
     LFields->funct3 = (current_instruction & L_FUNCT3_FIELD) >> L_FUNCT3_SHAMT;
     LFields->rs1    = (current_instruction & L_SRC1_FIELD)   >> L_SRC1_SHAMT  ;
     LFields->imm    = (current_instruction & L_IMMI_FIELD)   >> L_IMMI_SHAMT  ;
+	if(mode == DEBUG)
+	    printf("Destination: %x, Funct3: %x, Source register: %x, Immediate: %x", LFields->rd,LFields->funct3,LFields->rs1,LFields->imm);
     //loadexecute(funct,source_register1,dest_register,imm);
 }
 
@@ -467,240 +512,279 @@ int32_t signExtension_Jtype(int32_t imm)
 }
 
 /************* Execute function for R-type Instruction *************/
-void RTypeExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC)
+void RTypeExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag)
 {
-	  int function;
-	  function = (InstFields->funct7 << 3) + InstFields->funct3;
-    printf("function = %x\n",function);
+	int function;
+    function = (InstFields->funct7 << 3) + InstFields->funct3;
+    if(mode == DEBUG)
+	    printf("function = %x\n",function);
 
-    int rs2_mask=(GPR[InstFields->rs2] & 0x0000001f);
+    int shift_amount=(GPR[InstFields->rs2] & 0x0000001f);
     int rs1_msb,rs1_msb_temp,rd_temp,rd_temp1;
     int rsa_temp=0xffffffff;
-	  switch(function)
-	  {
-  	case ADD : GPR[InstFields->rd] = GPR[InstFields->rs1] + GPR[InstFields->rs2];
-		    		   break;
-		case SUB : GPR[InstFields->rd] = GPR[InstFields->rs1] - GPR[InstFields->rs2];
-		      	   break;
-		case SLL : GPR[InstFields->rd] = GPR[InstFields->rs1] << rs2_mask;
-		    	     break;
-		case SRL : GPR[InstFields->rd] =GPR[InstFields->rs1] >> rs2_mask;
-		    	     break;
-		case SRA : rd_temp1=GPR[InstFields->rs1]>>rs2_mask;
-				       rs1_msb_temp=0x80000000;
-				       rs1_msb=(rs1_msb_temp & GPR[InstFields->rs1]);
-               rs1_msb=rs1_msb>>31;
-               if(rs1_msb==1)
-				       {
-                  rd_temp=rsa_temp<<(32-rs2_mask);
-						      GPR[InstFields->rd] =(rd_temp1 |  rd_temp);
-					      }
-				       else
-					      {
-						      GPR[InstFields->rd] = GPR[InstFields->rs1] >> rs2_mask;
-					      }
-			         break;
- 	  case SLT : if(GPR[InstFields->rs1]<GPR[InstFields->rs2])
-					      {
-						      GPR[InstFields->rd] =1;
-					      }
-               else
-					      {
-						      GPR[InstFields->rd] =0;
-					      }
-				       break;
-		case SLTU: if(GPR[InstFields->rs2]!=0)
-					      {
-						      GPR[InstFields->rd] =1;
-				        }
-				       else
-					      {
-					        GPR[InstFields->rd] =0;
-					      }
-				       break;
-		case XOR : GPR[InstFields->rd] = (GPR[InstFields->rs1] ^ GPR[InstFields->rs2]);
-			         break;
- 	  case OR  : GPR[InstFields->rd] = (GPR[InstFields->rs1] | GPR[InstFields->rs2]);
-				       break;
-		case AND : GPR[InstFields->rd] = (GPR[InstFields->rs1] & GPR[InstFields->rs2]);
-		  	       break;
-    default  : printf("not an instruction\n");
-               GPR[InstFields->rd] = GPR[InstFields->rd]; GPR[InstFields->rs1]=GPR[InstFields->rs1]; GPR[InstFields->rs2]=GPR[InstFields->rs2];
-				       break;
-  	}
-
-    // printf("rd = %d rs1 = %d rs2 = %d \n",GPR[InstFields->rd],GPR[InstFields->rs1],GPR[InstFields->rs2]);
-    // gpr[dest_register]=rd;
-    /*for(int i=0;i<32;i++)
-    {
-    printf("register %d %d\n",i,GPR[i]);
-    }*/
+	switch(function)
+	{
+        case ADD :  GPR[InstFields->rd] = GPR[InstFields->rs1] + GPR[InstFields->rs2];
+                    break;
+        case SUB :  GPR[InstFields->rd] = GPR[InstFields->rs1] - GPR[InstFields->rs2];
+      	            break;
+        case SLL :  GPR[InstFields->rd] = GPR[InstFields->rs1] << shift_amount;
+                    break;
+        case SRL :  GPR[InstFields->rd] = (uint32_t)(GPR[InstFields->rs1]) >> shift_amount;
+                    break;
+        case SRA :  rd_temp1=GPR[InstFields->rs1]>>shift_amount;
+                    rs1_msb_temp=0x80000000;
+                    rs1_msb=(rs1_msb_temp & GPR[InstFields->rs1]);
+                    rs1_msb=rs1_msb>>31;
+                    if(rs1_msb==1)
+                    {
+                        rd_temp=rsa_temp<<(32-shift_amount);
+                        GPR[InstFields->rd] =(rd_temp1 |  rd_temp);
+                    }
+                    else
+                    {
+                        GPR[InstFields->rd] = GPR[InstFields->rs1] >> shift_amount;
+                    }
+                    break;
+        case SLT :  if(GPR[InstFields->rs1]<GPR[InstFields->rs2])
+                    {
+                        GPR[InstFields->rd] =1;
+                    }
+                    else
+                    {
+                        GPR[InstFields->rd] =0;
+                    }
+                    break;
+        case SLTU:  if((InstFields->rs1)==0)
+                    {
+                          if(GPR[InstFields->rs2]!=0)
+                          {
+                               GPR[InstFields->rd] =1;
+                          }
+                          else
+                          {
+                               GPR[InstFields->rd] =0;
+                          }
+                    }
+                    else 
+                    {
+                          if unsigned(GPR[InstFields->rs1]<GPR[InstFields->rs2])
+                          {
+                               GPR[InstFields->rd] =1;
+                          }
+                           else
+                          {
+                               GPR[InstFields->rd] =0;
+                          }
+                    }                
+                    break;
+        case XOR :  GPR[InstFields->rd] = (GPR[InstFields->rs1] ^ GPR[InstFields->rs2]);
+                    break;
+        case OR  :  GPR[InstFields->rd] = (GPR[InstFields->rs1] | GPR[InstFields->rs2]);
+                    break;
+        case AND :  GPR[InstFields->rd] = (GPR[InstFields->rs1] & GPR[InstFields->rs2]);
+                    break;
+        default  :  printf("Invalid Function bits in R-type\n");
+		            *flag = 0;
+					if(mode == DEBUG) {
+                        GPR[InstFields->rd] = GPR[InstFields->rd]; GPR[InstFields->rs1]=GPR[InstFields->rs1]; GPR[InstFields->rs2]=GPR[InstFields->rs2];
+                    }    
+                    break;
+    }
     *PC = *PC + 4;
 }
 
 /*********** Execution of Load Instructions **********/
-void LoadExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC)
+void LoadExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag)
 {
-     int rd_extend,rd_temp,effective_address,count,i;
-
+    int rd_extend,rd_temp,count,i;
+    uint32_t effective_address;
+	
 	switch(InstFields->funct3)
 	{
-   case LB: effective_address= GPR[InstFields->rs1] + signExtension(InstFields->imm);
-	           GPR[InstFields->rd]=memory[effective_address];
+        case LB : effective_address= GPR[InstFields->rs1] + signExtension(InstFields->imm);
+                  GPR[InstFields->rd]=memory[effective_address];
 
-               rd_extend = (0x0000000FF & GPR[InstFields->rd]);
+                  rd_extend = (0x000000FF & GPR[InstFields->rd]);
 
-               if(GPR[InstFields->rd] & 0x00000080){
-				       GPR[InstFields->rd]=(rd_extend | 0xffffff00);
-               }
-               else
-               {
-               GPR[InstFields->rd]=rd_extend;
-               }
-		break;
+                  if(GPR[InstFields->rd] & 0x00000080){
+                     GPR[InstFields->rd]=(rd_extend | 0xffffff00);
+                  }
+                  else {
+                     GPR[InstFields->rd]=rd_extend;
+                  }
+                  break;
 
-	 case LH: effective_address= GPR[InstFields->rs1] + signExtension(InstFields->imm);
-               GPR[InstFields->rd]=memory[effective_address];
-               effective_address +=1;
-               rd_temp=memory[effective_address];
-               GPR[InstFields->rd] +=(rd_temp<<8);
-               rd_extend = (0x00000FFFF & GPR[InstFields->rd]);
+        case LH : effective_address= GPR[InstFields->rs1] + signExtension(InstFields->imm);
+                  GPR[InstFields->rd]=memory[effective_address];
+                  effective_address +=1;
+                  rd_temp=memory[effective_address];
+                  GPR[InstFields->rd] +=(rd_temp<<8);
+                  rd_extend = (0x0000FFFF & GPR[InstFields->rd]);
 
-               if(GPR[InstFields->rd] & 0x00008000)
-               {
-               GPR[InstFields->rd]=(rd_extend | 0xffff0000);
-               }
-               else
-               {
-               GPR[InstFields->rd]=rd_extend;
-               }
-         
-               
-		break;
-	 case LW: effective_address= GPR[InstFields->rs1] + signExtension(InstFields->imm);
-               GPR[InstFields->rd]=memory[effective_address];
-               i=1;
-               count=3; 
-               while (count!=0)
-               {
-               effective_address +=1;  
-               rd_temp=memory[effective_address];                            
-               GPR[InstFields->rd] +=(rd_temp<<(8*i));
-               count -=1;
-               i+=1;
-               }
-		break;
-	 case LBU: effective_address= GPR[InstFields->rs1] + (InstFields->imm & 0x00000fff);
-	             GPR[InstFields->rd]=memory[effective_address];
-		break;
-	 case LHU: effective_address= GPR[InstFields->rs1] + (InstFields->imm & 0x00000fff);
-               GPR[InstFields->rd]=memory[effective_address];
-               effective_address +=1;
-               rd_temp=memory[effective_address];
-               GPR[InstFields->rd] +=(rd_temp<<8);
-		break;
-	default: printf("Invalid Instruction");
-        break;
+                  if(GPR[InstFields->rd] & 0x00008000)
+                  {
+                     GPR[InstFields->rd]=(rd_extend | 0xffff0000);
+                  }
+                  else
+                  {
+                     GPR[InstFields->rd]=rd_extend;
+                  }
+                  break;
+				 
+        case LW : effective_address= GPR[InstFields->rs1] + signExtension(InstFields->imm);
+                  GPR[InstFields->rd]=memory[effective_address];
+                  i=1;
+                  count=3; 
+                  while (count!=0)
+                  {
+                     effective_address +=1;  
+                     rd_temp=memory[effective_address];                            
+                     GPR[InstFields->rd] +=(rd_temp<<(8*i));
+                     count -=1;
+                     i+=1;
+                  }
+                  break;
+        case LBU: effective_address= GPR[InstFields->rs1] + signExtension(InstFields->imm);
+                  GPR[InstFields->rd]=memory[effective_address];
+                  break;
+        case LHU: effective_address= GPR[InstFields->rs1] + signExtension(InstFields->imm);
+                  GPR[InstFields->rd]=memory[effective_address];
+                  effective_address +=1;
+                  rd_temp=memory[effective_address];
+                  GPR[InstFields->rd] +=(rd_temp<<8);
+                  break;
+        default : printf("Function bits not found in Load");
+		          *flag = 0;
+                  break;
 	}
     *PC += 4;
-    printf("rd = %x rs1 = %x imm = %x effective_address = %x\n", InstFields->rd, InstFields->rs1, InstFields->imm, effective_address);
+    if(mode==DEBUG)
+        printf("rd = %d rs1 = %d imm = %x effective_address = %x\n", InstFields->rd, InstFields->rs1, InstFields->imm, effective_address);
 }
 
 /************* Store data into Memory *************/
-void StoreData(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC){
+void StoreData(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag){
+	unsigned int target;
 	switch(InstFields->funct3){
-        case SW: printf("SW Instruction\n");
-                 printf("Base Register: %x, Base Address: %x, Offset: %x, Byte Address: %x, Whole Data: %x\n", InstFields->rs1, GPR[InstFields->rs1], InstFields->imm, ((InstFields->imm)+(GPR[InstFields->rs1])), GPR[InstFields->rs2]);
-                 memory[(InstFields->imm)+(GPR[InstFields->rs1]) + 3] = (GPR[InstFields->rs2] & BYTE4_MASK) >> BYTE4_SHIFT_AMOUNT;
-                 memory[(InstFields->imm)+(GPR[InstFields->rs1]) + 2] = (GPR[InstFields->rs2] & BYTE3_MASK) >> BYTE3_SHIFT_AMOUNT;
-                 memory[(InstFields->imm)+(GPR[InstFields->rs1]) + 1] = (GPR[InstFields->rs2] & BYTE2_MASK) >> BYTE2_SHIFT_AMOUNT;
-                 memory[(InstFields->imm)+(GPR[InstFields->rs1])]     =  GPR[InstFields->rs2] & BYTE1_MASK;
-                 for(int i=(InstFields->imm)+(GPR[InstFields->rs1]); i<(InstFields->imm)+(GPR[InstFields->rs1])+4; i++) {
-                    printf("Memory[%d] = %x\n",i,memory[i]);
+        case SW: target = (InstFields->imm)+(GPR[InstFields->rs1]);
+				 if(mode == DEBUG) {
+				 printf("SW Instruction\n");
+                 printf("Base Register: %x, Base Address: %x, Offset: %x, Byte Address: %x, Whole Data: %x\n", InstFields->rs1, GPR[InstFields->rs1], InstFields->imm, target, GPR[InstFields->rs2]);
+				}	
+				 memory[target + 3] = (GPR[InstFields->rs2] & BYTE4_MASK) >> BYTE4_SHIFT_AMOUNT;
+                 memory[target + 2] = (GPR[InstFields->rs2] & BYTE3_MASK) >> BYTE3_SHIFT_AMOUNT;
+                 memory[target + 1] = (GPR[InstFields->rs2] & BYTE2_MASK) >> BYTE2_SHIFT_AMOUNT;
+                 memory[target]     =  GPR[InstFields->rs2] & BYTE1_MASK;
+                 if(mode == DEBUG) {
+				     for(int i=target; i<target+4; i++) {
+                        printf("Memory[%d] = %x\n",i,memory[i]);
+                     }
+				 }
+                 *PC = *PC + 4;
+                 break;
+        case SB: target = (InstFields->imm)+(GPR[InstFields->rs1]);
+				 if(mode == DEBUG) {
+				 printf("SB Instruction\n");
+                 printf("Base Register: %x, Base Address: %x, Offset: %x, Byte Address: %x, Whole Data: %x\n", InstFields->rs1, GPR[InstFields->rs1], InstFields->imm, target, GPR[InstFields->rs2]);
+				}	
+				 memory[target] = GPR[InstFields->rs2] & BYTE1_MASK;
+                 if(mode == DEBUG) {
+				 printf("Memory[%d] = %x\n", target, memory[target]);
                  }
-                 *PC = *PC + 4;
+				 *PC = *PC + 4;
                  break;
-        case SB: printf("SB Instruction\n");
-                 printf("Base Register: %x, Base Address: %x, Offset: %x, Byte Address: %x, Whole Data: %x\n", InstFields->rs1, GPR[InstFields->rs1], InstFields->imm, ((InstFields->imm)+(GPR[InstFields->rs1])), GPR[InstFields->rs2]);
-                 memory[(InstFields->imm)+(GPR[InstFields->rs1])] = GPR[InstFields->rs2] & BYTE1_MASK;
-                 printf("Memory[%d] = %x\n", (InstFields->imm)+(GPR[InstFields->rs1]), memory[(InstFields->imm)+(GPR[InstFields->rs1])]);
-                 *PC = *PC + 4;
-                 break;
-        case SH: printf("SH Instruction\n");
-                 printf("Base Register: %x, Base Address: %x, Offset: %x, Byte Address: %x, Whole Data: %x\n", InstFields->rs1, GPR[InstFields->rs1], InstFields->imm, ((InstFields->imm)+(GPR[InstFields->rs1])), GPR[InstFields->rs2]);
-                 memory[(InstFields->imm)+(GPR[InstFields->rs1]) + 1] = (GPR[InstFields->rs2] & BYTE2_MASK) >> BYTE2_SHIFT_AMOUNT;
-                 memory[(InstFields->imm)+(GPR[InstFields->rs1])]     = GPR[InstFields->rs2] & BYTE1_MASK;
-                 printf("Memory[%d] = %x\n", (InstFields->imm)+(GPR[InstFields->rs1]), memory[(InstFields->imm)+(GPR[InstFields->rs1])]);
-                 *PC = *PC + 4;
+        case SH: target = (InstFields->imm)+(GPR[InstFields->rs1]);
+				 if(mode == DEBUG) {
+				 printf("SH Instruction\n");
+                 printf("Base Register: %x, Base Address: %x, Offset: %x, Byte Address: %x, Whole Data: %x\n", InstFields->rs1, GPR[InstFields->rs1], InstFields->imm, target, GPR[InstFields->rs2]);
+				}
+				 memory[target + 1] = (GPR[InstFields->rs2] & BYTE2_MASK) >> BYTE2_SHIFT_AMOUNT;
+                 memory[target]     = GPR[InstFields->rs2] & BYTE1_MASK;
+                 if(mode == DEBUG) {
+				     printf("Memory[%d] = %x\n", target, memory[target]);
+					 printf("Memory[%d] = %x\n", target+1, memory[target+1]);
+                 }
+				 *PC = *PC + 4;
                  break;
         default: printf("Error: Cannot find the instruction based on opcode and func3\n");
+		         *flag = 0;
     }
 }
 
 /************* Branch Function *************/
-void Branch(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC){
+void Branch(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag){
 	switch(InstFields->funct3){
-        case BEQ :  printf("BEQ Instruction\n");
+        case BEQ :  if(mode == DEBUG)
+					    printf("BEQ Instruction\n");
                     if(GPR[InstFields->rs1] == GPR[InstFields->rs2])
                         *PC = *PC + InstFields->imm;
                     else
                         *PC = *PC + 4;
                     break;
-        case BNE :  printf("BNE Instruction\n");
+        case BNE :  if(mode == DEBUG)
+		                printf("BNE Instruction\n");
                     if(GPR[InstFields->rs1] != GPR[InstFields->rs2])
                         *PC = *PC + InstFields->imm;
                     else
                         *PC = *PC + 4;
                     break;
-        case BLT :  printf("BLT Instruction\n");
+        case BLT :  if(mode == DEBUG)
+		                printf("BLT Instruction\n");
                     if(GPR[InstFields->rs1] < GPR[InstFields->rs2])
                         *PC = *PC + InstFields->imm;
                     else
                         *PC = *PC + 4;
                     break;
-        case BGE :  printf("BGE Instruction\n");
+        case BGE :  if(mode == DEBUG)
+		                printf("BGE Instruction\n");
                     if(GPR[InstFields->rs1] >= GPR[InstFields->rs2])
                         *PC = *PC + InstFields->imm;
                     else
                         *PC = *PC + 4;
                     break;
-        case BLTU:  printf("BLTU Instruction\n"); //unsigned comparison
+        case BLTU:  if(mode == DEBUG)
+					    printf("BLTU Instruction\n"); //unsigned comparison
                     if((unsigned int)GPR[InstFields->rs1] < (unsigned int)GPR[InstFields->rs2])
                         *PC = *PC + InstFields->imm;
                     else
                         *PC = *PC + 4;
                     break;
-        case BGEU:  printf("BGEU Instruction\n"); //unsigned comparison
+        case BGEU:  if(mode == DEBUG)
+		                printf("BGEU Instruction\n"); //unsigned comparison
                     if((unsigned int)GPR[InstFields->rs1] >= (unsigned int)GPR[InstFields->rs2])
                         *PC = *PC + InstFields->imm;
                     else
                         *PC = *PC + 4;
                     break;
         default  : printf("Error: Cannot find the instruction based on opcode and func3\n");
+		           *flag = 0;
 	}
 }
 
 /************* LUI Execution Function *************/
-void LUIexecute(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC){
+void LUIexecute(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag){
 	GPR[InstFields->rd] = InstFields->imm << 12;
 	*PC = *PC + 4;
 }
 
 /************* AUIPC Type Execution Function *************/
-void AUIPCexecute(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC){
+void AUIPCexecute(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag){
 	GPR[InstFields->rd] = InstFields->imm << 12;
-	GPR[InstFields->rd] = GPR[InstFields->rd] + memory[*PC];
+	GPR[InstFields->rd] = GPR[InstFields->rd] + *PC;
 	*PC = *PC + 4;
 }
 
 /************* I-Type Execution Function *************/
-void ITypeExecute(int32_t* GPR, InstFields_t* IFields, uint8_t* memory, uint32_t* PC){
+void ITypeExecute(int32_t* GPR, InstFields_t* IFields, uint8_t* memory, uint32_t* PC, uint8_t* flag){
 	switch(IFields->funct3){
-        case ADDI :	printf("ADDI Instruction\n");
+        case ADDI :	if(mode == DEBUG)
+		                printf("ADDI Instruction\n");
 					GPR[IFields->rd] = GPR[IFields->rs1] + IFields->imm;
 					*PC = *PC + 4;
 					break;
-        case SLLI :	printf("SLLI Instruction\n");
+        case SLLI :	if(mode == DEBUG)
+					    printf("SLLI Instruction\n");
 					if(IFields->funct7 == 0x0){
 						GPR[IFields->rd] = GPR[IFields->rs1] << IFields->shamt;
 						*PC = *PC + 4;
@@ -715,32 +799,39 @@ void ITypeExecute(int32_t* GPR, InstFields_t* IFields, uint8_t* memory, uint32_t
 						GPR[IFields->rd] = 0;
 					*PC = *PC + 4;
 					break;
-        case SLTIU:	printf("SLTIU Instruction\n");
+        case SLTIU:	if(mode == DEBUG)
+					    printf("SLTIU Instruction\n");
 					if(GPR[IFields->rs1] != 0)
 						GPR[IFields->rd] = 1;
 					else
 						GPR[IFields->rd] = 0;
 					*PC = *PC + 4;
 					break;
-        case XORI :	printf("XORI Instruction\n");
+        case XORI :	if(mode == DEBUG)
+		                printf("XORI Instruction\n");
 					GPR[IFields->rd] = GPR[IFields->rs1] ^ IFields->imm;
 					*PC = *PC + 4;
 					break;
-        case ORI  :	printf("ORI Instruction\n");
+        case ORI  :	if(mode == DEBUG)
+		                printf("ORI Instruction\n");
 					GPR[IFields->rd] = GPR[IFields->rs1] | IFields->imm;
 					*PC = *PC + 4;
 					break;
-        case ANDI :	printf("ANDI Instruction\n");
+        case ANDI :	if(mode == DEBUG)
+					    printf("ANDI Instruction\n");
 					GPR[IFields->rd] = GPR[IFields->rs1] & IFields->imm;
 					*PC = *PC + 4;
 					break;
-        case SR   :	printf("SR Instruction\n");
+        case SR   :	if(mode == DEBUG)
+					    printf("SR Instruction\n");
 					switch(IFields->funct7){
-						case SRLI:	printf("SRLI Instruction");
+						case SRLI:	if(mode == DEBUG)
+									    printf("SRLI Instruction");
 									GPR[IFields->rd] = GPR[IFields->rs1] >> IFields->shamt;
 									*PC = *PC + 4;
 									break;
-						case SRAI:	printf("SRAI Instruction");
+						case SRAI:	{if(mode == DEBUG)
+									    printf("SRAI Instruction");
 									int rdTemp1 = GPR[IFields->rs1] >> IFields->shamt;
 									int rs1MSB = (0x80000000 & GPR[IFields->rs1]) >> 31;
 									if(rs1MSB == 1){
@@ -751,36 +842,42 @@ void ITypeExecute(int32_t* GPR, InstFields_t* IFields, uint8_t* memory, uint32_t
 										GPR[IFields->rd] = GPR[IFields->rs1] >> GPR[IFields->shamt];
 									*PC = *PC + 4;
 									break;
+						}
 						default	 : 	printf("Error: Cannot find the instruction");
 					}
 					break;
         default: printf("Error: Cannot find the instruction based on opcode and func3\n");
+		         *flag = 0;
     }
 }
 
 /**** Executing J Instruction*******/
-void JExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC) {
+void JExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag) {
     int32_t target;
     target = *PC + InstFields->imm;
-    GPR[InstFields->rd] = *PC + 4;
-    *PC += target;
-
-    printf("JType Execute- Target = %x \n", target);
+    if(InstFields->rd !=0)
+	    GPR[InstFields->rd] = *PC + 4;
+    *PC = target;
+    
+	if(mode == DEBUG)
+        printf("JType Execute- Target = %x \n", target);
 }
 
 /**** Executing JALR Instruction*******/
-void JALRExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, int8_t* flag) {
+void JALRExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag) {
     int target;
     target = (InstFields->imm + GPR[InstFields->rs1]) & 0xfffffffe;
-    GPR[InstFields->rd] = *PC + 4;
+	if(InstFields->rd !=0)
+	    GPR[InstFields->rd] = *PC + 4;
     *PC += target;
-    printf("\nTarget: %d", target);
+	if(mode == DEBUG)
+        printf("\nTarget: %d", target);
     if(target == 0)
       *flag = 0;
 }
 
 /************* Fetch an Instruction *************/
-uint32_t instruction_fetch(uint32_t pc){
+uint32_t instruction_fetch(uint32_t pc, uint8_t* flag){
     uint32_t fetched_instruction;
     uint8_t instruction_1, instruction_2, instruction_3, instruction_4;
 
@@ -789,84 +886,108 @@ uint32_t instruction_fetch(uint32_t pc){
     instruction_3 = memory[pc+2];
     instruction_4 = memory[pc+3];
     fetched_instruction = instruction_1 + (instruction_2 << BYTE2_SHIFT_AMOUNT) + (instruction_3 << BYTE3_SHIFT_AMOUNT) + (instruction_4 << BYTE4_SHIFT_AMOUNT);
-    printf("\nFetched Instruction: %x", fetched_instruction);
+    if(mode == VERBOSE || mode == DEBUG) 
+	    printf("\nPC: %x   Fetched Instruction: %x", pc,fetched_instruction);
 
     return(fetched_instruction);
 }
 
 /************* Decode the Current Instruction ************/
-void Decode(uint32_t current_instruction, InstFields_t *InstFields){
+void Decode(uint32_t current_instruction, InstFields_t *InstFields, uint8_t* flag){
     uint32_t Opcode;
-    printf("\nStarted Decoding\n");
+    if(mode == DEBUG)
+        printf("\nStarted Decoding\n");
 
     //identify the opcode and call the required instruction type
     Opcode = current_instruction & OPCODE_FIELD;
     InstFields->opcode = Opcode;
-    printf("\nOpcode for Current Instruction %x: %x",current_instruction, Opcode);
+    if(mode == DEBUG)
+        printf("\nOpcode for Current Instruction %x: %x",current_instruction, Opcode);
 
     switch(Opcode){
-        case 0x23:  printf("\n*****S-type Instruction*****\n");
+        case 0x23:  if(mode == DEBUG)
+                        printf("\n*****S-type Instruction*****\n");
                     STypeInst(current_instruction, InstFields);//function call to decode S-type instruction
                     break;
-        case 0x63:  printf("\n*****B-type Instruction*****\n");
+        case 0x63:  if(mode == DEBUG)
+		                printf("\n*****B-type Instruction*****\n");
                     BTypeInst(current_instruction, InstFields);//function call to decode B-type instruction
                     break;
-		case 0x13:  printf("\n*****I-type Instruction*****\n");
+		case 0x13:  if(mode == DEBUG)
+		                printf("\n*****I-type Instruction*****\n");
 					ITypeInst(current_instruction, InstFields);//function call to decode I-type instruction
 					break;
-		case 0x37:  printf("\n*****U-type Instruction*****\n");
+		case 0x37:  if(mode == DEBUG)
+		                printf("\n*****U-type Instruction*****\n");
 					UTypeInst(current_instruction, InstFields);//function call to decode U-type instruction
 					break;
-		case 0x27:  printf("\n*****U-type Instruction*****\n");
+		case 0x17:  if(mode == DEBUG)
+		                printf("\n*****U-type Instruction*****\n");
 					UTypeInst(current_instruction, InstFields);//function call to decode U-type instruction
 					break;
-        case 0x33:  printf("\n*****R-type Instruction*****\n");
+        case 0x33:  if(mode == DEBUG)
+		                printf("\n*****R-type Instruction*****\n");
                     RTypeInst(current_instruction, InstFields);//function call to decode R-type instruction
                     break;
-        case 0x6f:  printf("\n******J Instruction*****\n");
+        case 0x6f:  if(mode == DEBUG)
+		                printf("\n******J Instruction*****\n");
                     JInst(current_instruction, InstFields);//function call to decode J-type instruction
                     break;
-        case 0x67:  printf("\n******JALR Instruction*****\n");
+        case 0x67:  if(mode == DEBUG)
+		                printf("\n******JALR Instruction*****\n");
                     JALRInst(current_instruction, InstFields);//function call to decode J-type instruction
                     break;
-        case 0x03:  printf("\n******Load Instruction*******\n");
+        case 0x03:  if(mode == DEBUG)
+		                printf("\n******Load Instruction*******\n");
                     LoadInst(current_instruction, InstFields);//function call to decode load instruction
                     break;
         default:    printf("\n*****Other Instruction*****\n");
+                    *flag = 0;
     }
 
 }
 
 /************* Execute the Current Instruction ************/
-void ExecuteInstruction(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, int8_t* flag){
+void ExecuteInstruction(int32_t* GPR, InstFields_t* InstFields, uint8_t* memory, uint32_t* PC, uint8_t* flag){
     switch(InstFields->opcode){
-        case 0x23:  printf("\nExecution of S-type Instruction\n");
-					StoreData(GPR, InstFields, memory, PC);
+        case 0x23:  if(mode == DEBUG)
+	    	            printf("\nExecution of S-type Instruction\n");
+                    StoreData(GPR, InstFields, memory, PC, flag);
                     break;
-        case 0x63:  printf("\nExecution of B-type Instruction\n");
-					Branch(GPR, InstFields, memory, PC);
-					break;
-		case 0x13:  printf("\nExecution of I-type Instruction\n");
-					ITypeExecute(GPR, InstFields, memory, PC);
+        case 0x63:  if(mode == DEBUG)
+                        printf("\nExecution of B-type Instruction\n");
+                    Branch(GPR, InstFields, memory, PC, flag); 
                     break;
-		case 0x37:  printf("\nExecution of LUI Instruction\n");
-					LUIexecute(GPR, InstFields, memory, PC);
+        case 0x13:  if(mode == DEBUG)
+                        printf("\nExecution of I-type Instruction\n");
+                    ITypeExecute(GPR, InstFields, memory, PC, flag);
                     break;
-		case 0x27:  printf("\nExecution of AUIPC Instruction\n");
-					AUIPCexecute(GPR, InstFields, memory, PC);
+        case 0x37:  if(mode == DEBUG)
+                        printf("\nExecution of LUI Instruction\n");
+                    LUIexecute(GPR, InstFields, memory, PC, flag);
                     break;
-        case 0x33:  printf("\nExecution of R-Type Instruction\n");
-                    RTypeExecute(GPR, InstFields, memory, PC);
+        case 0x17:  if(mode == DEBUG)
+                       printf("\nExecution of AUIPC Instruction\n");
+                    AUIPCexecute(GPR, InstFields, memory, PC, flag);
                     break;
-        case 0x03:  printf("\nExecution of Load Instruction\n");
-                    LoadExecute(GPR, InstFields, memory, PC);
+        case 0x33:  if(mode == DEBUG)
+                        printf("\nExecution of R-Type Instruction\n");
+                    RTypeExecute(GPR, InstFields, memory, PC, flag);
                     break;
-        case 0x6f:  printf("\nExecution of J-Type Instruction\n");
-                    JExecute(GPR, InstFields, memory, PC);
+        case 0x03:  if(mode == DEBUG)
+		                printf("\nExecution of Load Instruction\n");
+                    LoadExecute(GPR, InstFields, memory, PC, flag);
                     break;
-        case 0x67:  printf("\nExecution of JALR Instruction\n");
+        case 0x6f:  if(mode == DEBUG)
+		                printf("\nExecution of J-Type Instruction\n");
+                    JExecute(GPR, InstFields, memory, PC, flag);
+                    break;
+        case 0x67:  if(mode == DEBUG)
+		                printf("\nExecution of JALR Instruction\n");
                     JALRExecute(GPR, InstFields, memory, PC, flag);
+                    break;
         default:    printf("\nExecution of Other Instruction\n");
+		            *flag = 0;
     }
 }
 
