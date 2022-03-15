@@ -568,7 +568,7 @@ void RTypeExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint
                     }
                     else 
                     {
-                          if ((uint32_t)(GPR[InstFields->rs1]<(uint32_t)GPR[InstFields->rs2]))
+                          if ((uint32_t)(GPR[InstFields->rs1]<(uint32_t)(GPR[InstFields->rs2]))
                           {
                                GPR[InstFields->rd] =1;
                           }
