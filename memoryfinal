@@ -568,7 +568,7 @@ void RTypeExecute(int32_t* GPR,  InstFields_t* InstFields, uint8_t* memory, uint
                     }
                     else 
                     {
-                          if unsigned(GPR[InstFields->rs1]<GPR[InstFields->rs2])
+                          if ((uint32_t)(GPR[InstFields->rs1]<(uint32_t)GPR[InstFields->rs2]))
                           {
                                GPR[InstFields->rd] =1;
                           }
@@ -799,14 +799,33 @@ void ITypeExecute(int32_t* GPR, InstFields_t* IFields, uint8_t* memory, uint32_t
 						GPR[IFields->rd] = 0;
 					*PC = *PC + 4;
 					break;
-        case SLTIU:	if(mode == DEBUG)
-					    printf("SLTIU Instruction\n");
-					if(GPR[IFields->rs1] != 0)
-						GPR[IFields->rd] = 1;
-					else
-						GPR[IFields->rd] = 0;
-					*PC = *PC + 4;
-					break;
+         case SLTIU:	if(mode == DEBUG)
+                     printf("SLTIU Instruction\n");
+                     if((IFields->imm)==1)
+                     {
+                          if(GPR[IFields->rs1]==0)
+                          {
+                               GPR[IFields->rd] =1;
+                          }
+                          else
+                          {
+                               GPR[IFields->rd] =0;
+                          }
+                    }
+                    else 
+                    {
+                          if ((uint32_t)(GPR[IFields->rs1]<(uint32_t)GPR[IFields->imm]))
+                          {
+                               GPR[IFields->rd] = 1;
+                          }
+                           else
+                           {
+                           
+                              GPR[IFields->rd] = 0;
+                          
+                          }
+                    }                
+                    break;
         case XORI :	if(mode == DEBUG)
 		                printf("XORI Instruction\n");
 					GPR[IFields->rd] = GPR[IFields->rs1] ^ IFields->imm;
